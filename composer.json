@@ -1,0 +1,6 @@
+{
+    "require": {
+        "artnum/bizcuit-swissqr": "^2.0",
+        "artnum/bizcuit-splitter": "^1.0"
+    }
+}
