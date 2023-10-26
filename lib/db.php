@@ -39,7 +39,7 @@ class DBMysql {
                 FROM facture
                 LEFT JOIN qraddress ON facture_qraddress = qraddress_id
                 WHERE 
-                    (facture_amount - ?) < 0.01
+                    ABS(facture_amount - ?) < 0.01
                     AND LOWER(facture_currency) = ?
                     AND qraddress_type = ?
                     AND qraddress_name = ?
