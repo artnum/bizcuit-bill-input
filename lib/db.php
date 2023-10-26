@@ -11,45 +11,56 @@ class DBMysql {
         $this->mysql = $mysql;
     }
 
-    function billExists (array $bill, array $client):bool {
+    function __destruct () {
+        $this->mysql->close();
+    }
+
+    /* normalize function are in DB class as it the way we want them in db */
+    function normalizeClientData (array $client): array {
+        $client['country'] = strtoupper($client['country']);
+        $client['iban'] = str_replace(' ', '', strtoupper($client['iban']));
+        return $client;
+    }
+
+    function normalizeBillData (array $bill):array {
+        $bill['amount'] = (float)str_replace(',', '.', $bill['amount']);
+        $bill['currency'] = strtoupper($bill['currency']);
+        return $bill;
+    }
+
+    /* this need normalized data */
+    function billExists (array $bill, array $client):false|int {
         try {
+            /* amount comparison don't work with x = y, so we use a small 
+               delta as swiss bill are limited to .01 steps
+             */
             $query = 'SELECT 
-                    facture_id, facture_amount, facture_currency,
-                    qraddress_type, qraddress_name, qraddress_country
-                FROM facture 
+                    facture_id, facture_amount 
+                FROM facture
                 LEFT JOIN qraddress ON facture_qraddress = qraddress_id
-                WHERE facture_hash = ?';
+                WHERE 
+                    (facture_amount - ?) < 0.01
+                    AND LOWER(facture_currency) = ?
+                    AND qraddress_type = ?
+                    AND qraddress_name = ?
+                    AND qraddress_country = ?';
             $stmt = $this->mysql->prepare($query);
-            $stmt->bind_param('s', $bill['hash']);
+            $stmt->bind_param(
+                'dssss',
+                $bill['amount'],
+                $bill['currency'],
+                $client['type'],
+                $client['name'],
+                $client['country']
+            );
             $stmt->execute();
-            $facture = ['id' => 0, 'amount' => 0, 'currency' => ''];
-            $qraddress = ['type' => '', 'name' => '', 'country' => ''];
-            $stmt->bind_result(
-                $facture['id'],
-                $facture['amount'],
-                $facture['currency'], 
-                $qraddress['type'],
-                $qraddress['name'],
-                $qraddress['country']);
+            $factureId = 0;
+        
+            $stmt->bind_result($factureId, $facture_amount);
             if (!$stmt->fetch()) {
                 return false;
             }
-            if (floatval($bill['amount']) !== floatval($facture['amount'])) {
-                return false;
-            }
-            if (strtolower($bill['currency']) !== strtolower($facture['currency'])) {
-                return false;
-            }
-            if (strtolower($client['type']) !== strtolower($qraddress['type'])) {
-                return false;
-            }
-            if (strtolower($client['name']) !== strtolower($qraddress['name'])) {
-                return false;
-            }
-            if (strtolower($client['country']) !== strtolower($qraddress['country'])) {
-                return false;
-            }
-            return true;
+            return $factureId;
         } catch (Exception $e) {
             throw new Exception('Mysqli error::billExists', 0, $e);
         }

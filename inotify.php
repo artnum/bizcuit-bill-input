@@ -122,7 +122,9 @@ function deamon ($argv) {
                     $bill['duedate'] = clone $bill['date'];
                     $bill['duedate']->add(new DateInterval('P' . $day . 'D'));
                     
-
+                    $bill = $DB->normalizeBillData($bill);
+                    $client = $DB->normalizeClientData($client);
+                    
                     echo "\tCheck bill exists : ";
                     if ($DB->billExists($bill, $client)) { echo "\t\tyes, skip\n"; continue; }
                     echo "\t\tno\n";
