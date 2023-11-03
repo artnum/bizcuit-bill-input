@@ -125,15 +125,14 @@ function deamon ($argv) {
                                 $bill['date'] = new DateTime();
                             }
                             if (isset($swico->reference)) {
-                                $bill['reference'] = $swico->reference;
-                            } else {
-                                $bill['reference'] = (!empty($data[QRCH\RmtInf\Ref]) ? $data[QRCH\RmtInf\Ref] : $data[QRCH\AddInf\Ustrd]);
+                                $bill['number'] = $swico->reference;
                             }
+                            $bill['reference'] = (!empty($data[QRCH\RmtInf\Ref]) ? $data[QRCH\RmtInf\Ref] : $data[QRCH\AddInf\Ustrd]);
+
                             if (isset($swico->ide)) {
                                 $client['ide'] = sprintf('CHE-%s.%s.%s', substr($swico->ide, 0, 3), substr($swico->ide, 3, 3), substr($swico->ide, 6, 3));
                             }
                             $day = 30;
-
                             if (isset($swico->conditions)) {
                                 foreach ($swico->conditions as $condition) {
                                     if ($condition['reduction'] === 0) {
@@ -142,10 +141,11 @@ function deamon ($argv) {
                                     }
                                 }
                                 $bill['conditions'] = implode(';', array_reduce($swico->conditions, function ($carry, $item) {
-                                    $carry[] = $item['day'] . ':' . $item['reduction'];
+                                    $carry[] = $item['reduction'] . ':' . $item['day'];
                                     return $carry;
                                 }, []));
-
+                            } else {
+                                $bill['conditions'] = '0:30';
                             }
                             $bill['duedate'] = clone $bill['date'];
                             $bill['duedate']->add(new DateInterval('P' . $day . 'D'));
@@ -166,14 +166,18 @@ function deamon ($argv) {
                                 echo "\tyes, ID : $qraddress_id\n";
                             }
 
-                            $archivePath = sprintf('%s/%s/%s', $conf['archive'], substr($hash, 0, 2), substr($hash, 2, 2));
-                            @mkdir($archivePath, 0777, true);
-                            $fileId = 0;
-                            do {
-                                $fileId++;
-                            } while(file_exists($archivePath . '/' . $hash . '_' . sprintf('%03d', $fileId) . '.pdf'));
-                            $bill['file'] = $hash . '_' . sprintf('%03d', $fileId);
-                            file_put_contents($archivePath . '/' . $bill['file'] . '.pdf', $pdfstring);
+                            if ($conf['pdfarchive'] || $conf['b64copy']) {
+                                $archivePath = sprintf('%s/%s/%s', $conf['archive'], substr($hash, 0, 2), substr($hash, 2, 2));
+                                @mkdir($archivePath, 0777, true);
+                                $fileId = 0;
+                                do {
+                                    $fileId++;
+                                } while(file_exists($archivePath . '/' . $hash . '_' . sprintf('%03d', $fileId) . '.pdf'));
+                                $bill['file'] = $hash . '_' . sprintf('%03d', $fileId);
+                                if ($conf['pdfarchive']) { file_put_contents($archivePath . '/' . $bill['file'] . '.pdf', $pdfstring); }
+                                /* more and more of those data are transmitted over the www, in some case a copy in base64 is usefull */
+                                if ($conf['b64copy']) { file_put_contents($archivePath . '/' . $bill['file'] . '.pdf.b64', base64_encode($pdfstring)); }
+                            }
                             $DB->factureCreate($bill, $qraddress_id);
                         }
                         unlink($file);
