@@ -35,28 +35,17 @@ class DBMysql {
                delta as swiss bill are limited to .01 steps
              */
             $query = 'SELECT 
-                    facture_id, facture_amount 
+                    facture_id 
                 FROM facture
                 LEFT JOIN qraddress ON facture_qraddress = qraddress_id
                 WHERE 
-                    ABS(facture_amount - ?) < 0.01
-                    AND LOWER(facture_currency) = ?
-                    AND qraddress_type = ?
-                    AND qraddress_name = ?
-                    AND qraddress_country = ?';
+                    facture_hash = ?';
             $stmt = $this->mysql->prepare($query);
-            $stmt->bind_param(
-                'dssss',
-                $bill['amount'],
-                $bill['currency'],
-                $client['type'],
-                $client['name'],
-                $client['country']
-            );
+            $stmt->bind_param('s', $bill['hash']);
             $stmt->execute();
             $factureId = 0;
         
-            $stmt->bind_result($factureId, $facture_amount);
+            $stmt->bind_result($factureId);
             if (!$stmt->fetch()) {
                 return false;
             }
@@ -114,8 +103,8 @@ class DBMysql {
         }
     }
 
-    const DEBITOR = 1;
-    const CREDITOR = 2;
+    const CREDITOR = 1;
+    const DEBITOR = 2;
     const CRED_SCORE = 3;
     const COMPENSATION = 4;
 
@@ -125,13 +114,14 @@ class DBMysql {
             $query = 'INSERT INTO facture (
                 facture_amount, facture_currency, facture_qraddress, facture_hash,
                 facture_qrdata, facture_date, facture_duedate, facture_reference,
-                facture_conditions, facture_file, facture_type, facture_indate
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                facture_conditions, facture_file, facture_type, facture_indate,
+                facture_number
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
             $stmt = $this->mysql->prepare($query);
             $date = $facture['date']->format('Y-m-d');
             $duedate = $facture['duedate']->format('Y-m-d');
             $stmt->bind_param(
-                'dsisssssssis',
+                'dsisssssssiss',
                 $facture['amount'],
                 $facture['currency'],
                 $qraddress,
@@ -143,7 +133,8 @@ class DBMysql {
                 $facture['conditions'],
                 $facture['file'],
                 $type,
-                $now);
+                $now,
+                $facture['number']);
             if (!$stmt->execute()) { return false; }
             return (int)$stmt->insert_id;
         } catch (Exception $e) {
