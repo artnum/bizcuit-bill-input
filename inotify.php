@@ -97,7 +97,25 @@ function deamon ($argv) {
                         foreach(splitter($file) as $pdfstring) {
                             $error = '';
                             $data = read_qr_data($pdfstring, $error);
-                            if (!$data) { echo "[$pid]\tFailed : $error\n"; continue; }
+                            if (!$data) {
+                                $facture = [
+                                    'hash' => hash(HASH_FILE_ALGO, $pdfstring)
+                                ];
+                                if ($conf['pdfarchive'] || $conf['b64copy']) {
+                                    $archivePath = sprintf('%s/%s/%s', $conf['archive'], substr($facture['hash'], 0, 2), substr($facture['hash'], 2, 2));
+                                    @mkdir($archivePath, 0777, true);
+                                    $fileId = 0;
+                                    do {
+                                        $fileId++;
+                                    } while(file_exists($archivePath . '/' . $facture['hash'] . '_' . sprintf('%03d', $fileId) . '.pdf'));
+                                    $facture['file'] = $facture['hash'] . '_' . sprintf('%03d', $fileId);
+                                    if ($conf['pdfarchive']) { file_put_contents($archivePath . '/' . $facture['file'] . '.pdf', $pdfstring); }
+                                    /* more and more of those data are transmitted over the www, in some case a copy in base64 is usefull */
+                                    if ($conf['b64copy']) { file_put_contents($archivePath . '/' . $facture['file'] . '.pdf.b64', base64_encode($pdfstring)); }
+                                }
+                                $DB->factureCreateBlank($facture, 0, DBMysql::COMPENSATION);
+                                echo "[$pid]\tFailed : $error\n"; continue; 
+                            }
 
                             $client = [];
                             $hCTX = hash_init(HASH_FILE_ALGO);
@@ -124,6 +142,7 @@ function deamon ($argv) {
                             } else {
                                 $bill['date'] = new DateTime();
                             }
+                            $bill['number'] = '';
                             if (isset($swico->reference)) {
                                 $bill['number'] = $swico->reference;
                             }
@@ -183,7 +202,11 @@ function deamon ($argv) {
                         unlink($file);
                         exit(0);
                     } catch (Exception $e) {
-                        echo "[$pid]\tException : " . $e->getMessage() . PHP_EOL;
+                        $first = true;
+                        do {
+                            if ($first) { echo "[$pid]\tException : " . $e->getMessage() . PHP_EOL; $first = false; }
+                            else { echo "\t\t" . $e->getMessage() . PHP_EOL; }
+                        } while (($e = $e->getPrevious()));
                         exit(1);
                     }
                 } else {

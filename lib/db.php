@@ -141,4 +141,22 @@ class DBMysql {
             throw new Exception('Mysqli error::factureCreate', 0, $e);
         }
     }
+
+    function factureCreateBlank (array $facture, int $type = DBMysql::CREDITOR):int|false {
+        $now =  new DateTime();
+
+        $facture = [
+            'date' => $now,
+            'duedate' => $now,
+            'amount' => 0.0,
+            'currency' => 'CHF',
+            'qrdata' => '',
+            'reference' => '',
+            'conditions' => '0:30',
+            'file' => $facture['file'],
+            'hash' => $facture['hash'],
+            'number' => ''
+        ];
+        return $this->factureCreate($facture, 0, $type);
+    }
 }
