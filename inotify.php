@@ -96,7 +96,12 @@ function deamon ($argv) {
                         pcntl_sigprocmask(SIG_BLOCK, [SIGINT, SIGQUIT, SIGTERM, SIGHUP]);
                         foreach(splitter($file) as $pdfstring) {
                             $error = '';
-                            $data = read_qr_data($pdfstring, $error);
+                            $data = [];
+                            try {
+                                $data = read_qr_data($pdfstring, $error);
+                            } catch(Exception $e) {
+                                $data = false;
+                            }
                             if (!$data) {
                                 $facture = [
                                     'hash' => hash(HASH_FILE_ALGO, $pdfstring)
