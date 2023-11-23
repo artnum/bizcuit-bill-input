@@ -95,6 +95,7 @@ function deamon ($argv) {
                         $DB = new DBMysql($mysql);
                         pcntl_sigprocmask(SIG_BLOCK, [SIGINT, SIGQUIT, SIGTERM, SIGHUP]);
                         foreach(splitter($file) as $pdfstring) {
+                            $filehash = hash(HASH_FILE_ALGO, $pdfstring);
                             $error = '';
                             $data = [];
                             try {
@@ -104,7 +105,7 @@ function deamon ($argv) {
                             }
                             if (!$data) {
                                 $facture = [
-                                    'hash' => hash(HASH_FILE_ALGO, $pdfstring)
+                                    'hash' => $filehash
                                 ];
                                 if ($conf['pdfarchive'] || $conf['b64copy']) {
                                     $archivePath = sprintf('%s/%s/%s', $conf['archive'], substr($facture['hash'], 0, 2), substr($facture['hash'], 2, 2));
@@ -123,10 +124,7 @@ function deamon ($argv) {
                             }
 
                             $client = [];
-                            $hCTX = hash_init(HASH_FILE_ALGO);
-                            array_map(function ($line) use ($hCTX) { hash_update($hCTX, $line); }, $data);
-                            $hash = hash_final($hCTX);
-                            $bill = ['hash' => $hash, 'reference' => ''];
+                            $bill = ['hash' => $filehash, 'reference' => ''];
 
                             $client['ide'] = '';
                             $client['type'] = $data[QRCH\Cdtr\AdrTp];
@@ -177,9 +175,12 @@ function deamon ($argv) {
                             $bill = $DB->normalizeBillData($bill);
                             $client = $DB->normalizeClientData($client);
 
-                            echo "[$pid]\tCheck bill exists : ";
+                            /* Can't really check for that, have to figure out 
+                             * another way
+                             */
+                            /*echo "[$pid]\tCheck bill exists : ";
                             if ($DB->billExists($bill, $client)) { echo "\t\tyes, skip\n"; continue; }
-                            echo "\t\tno\n";
+                            echo "\t\tno\n"; */
 
                             echo "[$pid]\tCheck qraddress exists : ";
                             $qraddress_id = $DB->qraddressExists($client);
@@ -191,13 +192,13 @@ function deamon ($argv) {
                             }
 
                             if ($conf['pdfarchive'] || $conf['b64copy']) {
-                                $archivePath = sprintf('%s/%s/%s', $conf['archive'], substr($hash, 0, 2), substr($hash, 2, 2));
+                                $archivePath = sprintf('%s/%s/%s', $conf['archive'], substr($filehash, 0, 2), substr($filehash, 2, 2));
                                 @mkdir($archivePath, 0777, true);
                                 $fileId = 0;
                                 do {
                                     $fileId++;
-                                } while(file_exists($archivePath . '/' . $hash . '_' . sprintf('%03d', $fileId) . '.pdf'));
-                                $bill['file'] = $hash . '_' . sprintf('%03d', $fileId);
+                                } while(file_exists($archivePath . '/' . $filehash . '_' . sprintf('%03d', $fileId) . '.pdf'));
+                                $bill['file'] = $filehash . '_' . sprintf('%03d', $fileId);
                                 if ($conf['pdfarchive']) { file_put_contents($archivePath . '/' . $bill['file'] . '.pdf', $pdfstring); }
                                 /* more and more of those data are transmitted over the www, in some case a copy in base64 is usefull */
                                 if ($conf['b64copy']) { file_put_contents($archivePath . '/' . $bill['file'] . '.pdf.b64', base64_encode($pdfstring)); }
